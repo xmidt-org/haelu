@@ -47,7 +47,7 @@ type subsystemTracker struct {
 // this method does nothing.
 //
 // If this method starts a goroutine, it will stop with the supplied
-// context is cancelled.
+// context is canceled.
 func (ssm *subsystemTracker) startProbeTask(ctx context.Context) {
 	if ssm.definition.Probe == nil {
 		return

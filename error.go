@@ -5,15 +5,15 @@ package haelu
 
 import "errors"
 
-// Statuser is an optional interface that an error can implement
+// SelfStatuser is an optional interface that an error can implement
 // to indicate its health status.
-type Statuser interface {
+type SelfStatuser interface {
 	Status() Status
 }
 
-// Booler is an alternative to Statuser that lets an error simply
+// SelfBooler is an alternative to SelfStatuser that lets an error simply
 // indicate good or bad health.
-type Booler interface {
+type SelfBooler interface {
 	Status() bool
 }
 
@@ -31,7 +31,7 @@ func (se *statusError) Unwrap() error {
 }
 
 // AddStatus associates a health Status with the given error. The
-// returned error will wrap err and implement Statuser.
+// returned error will wrap err and implement SelfStatuser.
 //
 // If err already has a status associated with it, it will be
 // replaced with the given status.
@@ -47,17 +47,17 @@ func AddStatus(err error, status Status) error {
 //
 // If err is nil, this function returns StatusGood.
 //
-// If err implements Statuser, then the result of Statuser.Status() is returned.
+// If err implements SelfStatuser, then the result of SelfStatuser.Status() is returned.
 //
-// If err implements Booler, then StatusGood or StatusBad is returned
-// based on the return value of Booler.Status().
+// If err implements SelfBooler, then StatusGood or StatusBad is returned
+// based on the return value of SelfBooler.Status().
 //
 // For a non-nil error that does not implement one of the optional
 // interfaces in this package, this function returns StatusBad.
 func ErrorStatus(err error) Status {
 	var (
-		s Statuser
-		b Booler
+		s SelfStatuser
+		b SelfBooler
 	)
 
 	switch {

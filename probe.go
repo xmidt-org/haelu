@@ -18,7 +18,7 @@ const (
 
 // Probe is a callback type to interrogate a subsystem for its health status.
 // A Probe may consult information out-of-process, so it's passed a context.Context
-// that gets cancelled when a Monitor is shutdown.
+// that gets canceled when a Monitor is shutdown.
 type Probe func(context.Context) (Status, error)
 
 // ProbeFunc describes the various closure types that are convertible to Probes.
