@@ -99,3 +99,11 @@ type Subsystem struct {
 	// subsystem was defined.
 	Attributes Attributes `json:"attributes,omitempty" yaml:"attributes,omitempty"`
 }
+
+// Updater is a interface that can be used to update a subsystem's
+// health Status as well as pause and resume monitoring.
+type Updater interface {
+	// Update supplies a possibly new status and an optional error that
+	// occurred while checking the status or otherwise using the subsystem.
+	Update(Status, error)
+}
