@@ -3,10 +3,18 @@ Upstream-Name: haelu
 Upstream-Contact: John Bass <john_bass2@cable.comcast.com>
 Source: https://github.com/xmidt-org/haelu
 
-Files: status_string.go
+Files: go.mod go.sum
 Copyright: SPDX-FileCopyrightText: 2025 Comcast Cable Communications Management, LLC
 License: Apache-2.0
 
-Files: go.mod go.sum
+Files: *.yml *.md
+Copyright: SPDX-FileCopyrightText: 2025 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: .gitignore
+Copyright: SPDX-FileCopyrightText: 2025 Comcast Cable Communications Management, LLC
+License: Apache-2.0
+
+Files: status_string.go
 Copyright: SPDX-FileCopyrightText: 2025 Comcast Cable Communications Management, LLC
 License: Apache-2.0
