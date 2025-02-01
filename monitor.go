@@ -244,9 +244,9 @@ func (m *Monitor) Start() error {
 	return nil
 }
 
-// Shutdown sets the overall status to StatusNotStarted and then ensures no
-// background tasks for Probe monitoring are running. A Monitor may receive
-// updates from subsystems at any time, even after Shutdown is called.
+// Shutdown stops any running tasks. The status of subsystems are preserved.
+// After this method has been called, Probes are no longer run but any
+// Updaters may still be used to update subsystem states.
 //
 // This method is idempotent. If this Monitor is not running,
 // this method does nothing and returns ErrMonitorShutdown.
