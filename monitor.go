@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -21,6 +22,22 @@ var (
 	ErrMonitorShutdown = errors.New("the monitor has been shutdown")
 )
 
+// MonitorState holds a snapshot of the state of a Monitor.
+type MonitorState struct {
+	// Status is the new overall status of the Monitor.
+	Status Status `json:"status" yaml:"status"`
+
+	// LastUpdate is the timestamp of the monitor's last update to any subsystem.
+	// This will include updates that may not have changed the status.
+	//
+	// This timestamp will always be in UTC.
+	LastUpdate time.Time `json:"lastUpdate" yaml:"lastUpdate"`
+
+	// Subsystems is a snapshot of the state of each subsystem within
+	// the Monitor.
+	Subsystems Subsystems `json:"subsystems" yaml:"subsystems"`
+}
+
 // subsystemTracker holds all the information for tracking the state of
 // a single subsystem.
 type subsystemTracker struct {
@@ -30,9 +47,9 @@ type subsystemTracker struct {
 	// newTimer is the timer strategy "inherited" from the containing monitor
 	newTimer newTimer
 
-	// unsafeUpdateStatus is the "inherited" non-atomic closure that updates monitor
-	// status.
-	unsafeUpdateStatus func(time.Time)
+	// unsafeUpdateState is the "inherited" non-atomic closure that updates monitor
+	// state.
+	unsafeUpdateState func(time.Time)
 
 	// definition is the configuration used to create this subsystem
 	definition Definition
@@ -81,7 +98,7 @@ func (ssm *subsystemTracker) Update(s Status, err error) {
 	ssm.current.LastError = err
 	ssm.current.LastUpdate = time.Now().UTC()
 
-	ssm.unsafeUpdateStatus(ssm.current.LastUpdate)
+	ssm.unsafeUpdateState(ssm.current.LastUpdate)
 }
 
 // Monitor is a health status monitor for application subsystems.
@@ -110,79 +127,60 @@ type Monitor struct {
 	byName     map[Name]*subsystemTracker
 	trackers   []*subsystemTracker
 	subsystems []Subsystem
-	listeners  MonitorListeners
 
-	lock sync.RWMutex
+	// lock is primarily used to guard subsystem updates
+	lock sync.Mutex
 
-	// status is the overall health Status of this monitor.
-	// this value is recomputed whenever a health update happens.
-	status Status
-
-	// lastUpdate is the timestamp of the last overall status change.
-	// Start will always set this to the current time.
-	lastUpdate time.Time
+	// state is the overall state of this Monitor
+	state atomic.Value
 
 	// cancel is the cancellation function used to control any probe tasks
 	cancel context.CancelFunc
 }
 
-// subsystemIter is an iter.Seq[Subsystem] that permits read-only
-// access to the current subsystems.
-func (m *Monitor) subsystemIter(f func(Subsystem) bool) {
-	for _, s := range m.subsystems {
-		if !f(s) {
-			return
-		}
-	}
-}
-
-// unsafeUpdateStatus performs the following:
+// unsafeUpdateState performs the following:
 //
 // (1) computes the (possibly) new overall status based on the current subystem states
-// (2) dispatches events to configured listeners
+// (2) updates the atomic state for this Monitor
 //
 // The timestamp of the update is supplied so that it's consistent with the timestamp
 // of any individual subsystem updates.
 //
 // This method must be executed under the monitor lock or in a situation where no
 // concurrent invocation is possible.
-func (m *Monitor) unsafeUpdateStatus(timestamp time.Time) {
-	m.lastUpdate = timestamp
-
+func (m *Monitor) unsafeUpdateState(timestamp time.Time) {
 	var (
+		overall           Status
 		criticalStatus    Status
 		nonCriticalStatus Status
 	)
 
-	for _, ssm := range m.trackers {
+	for _, st := range m.trackers {
 		switch {
-		case ssm.definition.NonCritical && ssm.current.Status > nonCriticalStatus:
-			nonCriticalStatus = ssm.current.Status
+		case st.definition.NonCritical && st.current.Status > nonCriticalStatus:
+			nonCriticalStatus = st.current.Status
 
-		case !ssm.definition.NonCritical && ssm.current.Status > criticalStatus:
-			criticalStatus = ssm.current.Status
+		case !st.definition.NonCritical && st.current.Status > criticalStatus:
+			criticalStatus = st.current.Status
 		}
 	}
 
 	switch {
 	case criticalStatus != StatusGood:
-		m.status = criticalStatus
+		overall = criticalStatus
 
 	case nonCriticalStatus != StatusGood:
-		m.status = StatusWarn
+		overall = StatusWarn
 
 	default:
-		m.status = StatusGood
+		overall = StatusGood
 	}
 
-	m.listeners.OnMonitorEvent(
-		MonitorEvent{
-			Status:         m.status,
-			LastUpdate:     m.lastUpdate,
-			SubsystemCount: len(m.subsystems),
-			Subsystems:     m.subsystemIter,
-		},
-	)
+	m.state.Store(MonitorState{
+		Status:     overall,
+		LastUpdate: timestamp,
+		Subsystems: wrapSubsystemSlice(m.subsystems),
+	})
 }
 
 // Len returns the count of subsystems that are defined for this Monitor.
@@ -206,15 +204,9 @@ func (m *Monitor) Get(n Name) (Updater, error) {
 	return updater, nil
 }
 
-// Status returns the overall health status for this Monitor. If this Monitor has
-// not been started, this method returns StatusGood. If this Monitor has been Shutdown
-// and then restarted, it returns whatever the last computed status was before it
-// was shutdown.
-func (m *Monitor) Status() (current Status) {
-	m.lock.RLock()
-	current = m.status
-	m.lock.RUnlock()
-	return
+// State returns the last computed state for this Monitor.
+func (m *Monitor) State() MonitorState {
+	return m.state.Load().(MonitorState)
 }
 
 // Start computes the initial, overall state based on the status of the subystems
@@ -223,9 +215,6 @@ func (m *Monitor) Status() (current Status) {
 //
 // This method is idempotent. If this Monitor has already been started, this method
 // does nothing and returns ErrMonitorStarted.
-//
-// If a Monitor is Shutdown and then Started again, the previous states of all
-// subsystems are retained.
 func (m *Monitor) Start() error {
 	defer m.lock.Unlock()
 	m.lock.Lock()
@@ -234,11 +223,11 @@ func (m *Monitor) Start() error {
 		return ErrMonitorStarted
 	}
 
-	m.unsafeUpdateStatus(time.Now().UTC())
+	m.unsafeUpdateState(time.Now().UTC())
 	var rootCtx context.Context
 	rootCtx, m.cancel = context.WithCancel(context.Background())
-	for _, ssm := range m.trackers {
-		ssm.startProbeTask(rootCtx)
+	for _, st := range m.trackers {
+		st.startProbeTask(rootCtx)
 	}
 
 	return nil
@@ -293,23 +282,15 @@ func WithSubsystem(d Definition) MonitorOption {
 			return fmt.Errorf("A subsystem with the name [%s] already exists", d.Name)
 		}
 
-		ssm := &subsystemTracker{
-			lock:               &m.lock,
-			unsafeUpdateStatus: m.unsafeUpdateStatus,
-			definition:         d,
+		st := &subsystemTracker{
+			lock:              &m.lock,
+			unsafeUpdateState: m.unsafeUpdateState,
+			definition:        d,
 		}
 
-		ssm.definition.Attributes = d.Attributes.Clone()
-		m.byName[d.Name] = ssm
-		m.trackers = append(m.trackers, ssm)
-		return nil
-	})
-}
-
-// WithListeners adds listeners to the Monitor.
-func WithListeners(ls ...MonitorListener) MonitorOption {
-	return monitorOptionFunc(func(m *Monitor) error {
-		m.listeners = append(m.listeners, ls...)
+		st.definition.Attributes = d.Attributes.Clone()
+		m.byName[d.Name] = st
+		m.trackers = append(m.trackers, st)
 		return nil
 	})
 }
@@ -319,6 +300,8 @@ func WithListeners(ls ...MonitorListener) MonitorOption {
 // must be started in order to receive Probe updates.
 //
 // The set of subsystems is fixed and immutable after construction.
+// The initial value returned by the Monitor from the State method will
+// be computed from the initial states of the subsystems.
 // If no subsystems are configured in the options, the returned
 // Monitor will always report StatusGood as its overall status.
 func NewMonitor(opts ...MonitorOption) (*Monitor, error) {
@@ -326,7 +309,6 @@ func NewMonitor(opts ...MonitorOption) (*Monitor, error) {
 		byName:               make(map[Name]*subsystemTracker),
 		defaultProbeInterval: DefaultProbeInterval,
 		newTimer:             defaultNewTimer,
-		status:               StatusGood,
 	}
 
 	for _, o := range opts {
@@ -339,22 +321,23 @@ func NewMonitor(opts ...MonitorOption) (*Monitor, error) {
 
 	// now that the options are applied, make a pass over the subsystems
 	initialLastUpdate := time.Now().UTC()
-	for i, ssm := range m.trackers {
-		ssm.newTimer = m.newTimer
+	for i, st := range m.trackers {
+		st.newTimer = m.newTimer
 
 		// take the initial state from the definition
-		ssm.current = &m.subsystems[i]
-		ssm.current.Status = ssm.definition.Status
-		ssm.current.Attributes = ssm.definition.Attributes
-		ssm.current.LastUpdate = initialLastUpdate
+		st.current = &m.subsystems[i]
+		st.current.Status = st.definition.Status
+		st.current.Attributes = st.definition.Attributes
+		st.current.LastUpdate = initialLastUpdate
 
 		// normalize the probe interval
-		if ssm.definition.Probe == nil {
-			ssm.definition.ProbeInterval = 0
-		} else if ssm.definition.ProbeInterval <= 0 {
-			ssm.definition.ProbeInterval = m.defaultProbeInterval
+		if st.definition.Probe == nil {
+			st.definition.ProbeInterval = 0
+		} else if st.definition.ProbeInterval <= 0 {
+			st.definition.ProbeInterval = m.defaultProbeInterval
 		}
 	}
 
+	m.unsafeUpdateState(initialLastUpdate)
 	return m, nil
 }
