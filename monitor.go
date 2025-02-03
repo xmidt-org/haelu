@@ -47,9 +47,9 @@ type subsystemTracker struct {
 	// newTimer is the timer strategy "inherited" from the containing monitor
 	newTimer newTimer
 
-	// unsafeUpdateStatus is the "inherited" non-atomic closure that updates monitor
-	// status.
-	unsafeUpdateStatus func(time.Time)
+	// unsafeUpdateState is the "inherited" non-atomic closure that updates monitor
+	// state.
+	unsafeUpdateState func(time.Time)
 
 	// definition is the configuration used to create this subsystem
 	definition Definition
@@ -98,7 +98,7 @@ func (ssm *subsystemTracker) Update(s Status, err error) {
 	ssm.current.LastError = err
 	ssm.current.LastUpdate = time.Now().UTC()
 
-	ssm.unsafeUpdateStatus(ssm.current.LastUpdate)
+	ssm.unsafeUpdateState(ssm.current.LastUpdate)
 }
 
 // Monitor is a health status monitor for application subsystems.
@@ -138,7 +138,7 @@ type Monitor struct {
 	cancel context.CancelFunc
 }
 
-// unsafeUpdateStatus performs the following:
+// unsafeUpdateState performs the following:
 //
 // (1) computes the (possibly) new overall status based on the current subystem states
 // (2) updates the atomic state for this Monitor
@@ -148,7 +148,7 @@ type Monitor struct {
 //
 // This method must be executed under the monitor lock or in a situation where no
 // concurrent invocation is possible.
-func (m *Monitor) unsafeUpdateStatus(timestamp time.Time) {
+func (m *Monitor) unsafeUpdateState(timestamp time.Time) {
 	var (
 		overall           Status
 		criticalStatus    Status
@@ -215,9 +215,6 @@ func (m *Monitor) State() MonitorState {
 //
 // This method is idempotent. If this Monitor has already been started, this method
 // does nothing and returns ErrMonitorStarted.
-//
-// If a Monitor is Shutdown and then Started again, the previous states of all
-// subsystems are retained.
 func (m *Monitor) Start() error {
 	defer m.lock.Unlock()
 	m.lock.Lock()
@@ -226,7 +223,7 @@ func (m *Monitor) Start() error {
 		return ErrMonitorStarted
 	}
 
-	m.unsafeUpdateStatus(time.Now().UTC())
+	m.unsafeUpdateState(time.Now().UTC())
 	var rootCtx context.Context
 	rootCtx, m.cancel = context.WithCancel(context.Background())
 	for _, st := range m.trackers {
@@ -286,9 +283,9 @@ func WithSubsystem(d Definition) MonitorOption {
 		}
 
 		st := &subsystemTracker{
-			lock:               &m.lock,
-			unsafeUpdateStatus: m.unsafeUpdateStatus,
-			definition:         d,
+			lock:              &m.lock,
+			unsafeUpdateState: m.unsafeUpdateState,
+			definition:        d,
 		}
 
 		st.definition.Attributes = d.Attributes.Clone()
@@ -341,6 +338,6 @@ func NewMonitor(opts ...MonitorOption) (*Monitor, error) {
 		}
 	}
 
-	m.unsafeUpdateStatus(initialLastUpdate)
+	m.unsafeUpdateState(initialLastUpdate)
 	return m, nil
 }
