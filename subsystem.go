@@ -3,7 +3,19 @@
 
 package haelu
 
-import "time"
+import (
+	"encoding/json"
+	"iter"
+	"time"
+)
+
+// Updater is a interface that can be used to update a subsystem's
+// health Status as well as pause and resume monitoring.
+type Updater interface {
+	// Update supplies a possibly new status and an optional error that
+	// occurred while checking the status or otherwise using the subsystem.
+	Update(Status, error)
+}
 
 // Attributes are a set of name/value pairs associated with a Subsystem.
 // Attributes are not used by a health Monitor and can provide extra
@@ -100,10 +112,31 @@ type Subsystem struct {
 	Attributes Attributes `json:"attributes,omitempty" yaml:"attributes,omitempty"`
 }
 
-// Updater is a interface that can be used to update a subsystem's
-// health Status as well as pause and resume monitoring.
-type Updater interface {
-	// Update supplies a possibly new status and an optional error that
-	// occurred while checking the status or otherwise using the subsystem.
-	Update(Status, error)
+// Subsystems is an immutable, iterable sequence of Subsystem snapshots.
+type Subsystems struct {
+	ss []Subsystem
+}
+
+// wrapSubsystemSlice clones the given slice and returns an immutable
+// sequence over it.
+func wrapSubsystemSlice(original []Subsystem) (s Subsystems) {
+	s.ss = make([]Subsystem, len(original))
+	copy(s.ss, original)
+	return
+}
+
+// All provides an iterator over this immutable sequence.
+func (s Subsystems) All() iter.Seq[Subsystem] {
+	return func(f func(Subsystem) bool) {
+		for _, s := range s.ss {
+			if !f(s) {
+				return
+			}
+		}
+	}
+}
+
+// MarshalJSON marshals this sequence as a slice of Subsystems.
+func (s Subsystems) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.ss)
 }
