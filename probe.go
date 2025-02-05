@@ -97,7 +97,7 @@ func AsProbe[F ProbeFunc](f F) Probe {
 		}
 
 	case fv.CanConvert(probeContextReturnStatus):
-		pf := fv.Convert(probeContextReturnError).Interface().(func(context.Context) Status)
+		pf := fv.Convert(probeContextReturnStatus).Interface().(func(context.Context) Status)
 		return func(ctx context.Context) (Status, error) {
 			return pf(ctx), nil
 		}

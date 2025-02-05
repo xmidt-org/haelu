@@ -8,12 +8,17 @@ import "errors"
 // SelfStatuser is an optional interface that an error can implement
 // to indicate its health status.
 type SelfStatuser interface {
+	// Status returns the health status for this error. Note that this allows
+	// errors to indicate a healthy status.
 	Status() Status
 }
 
 // SelfBooler is an alternative to SelfStatuser that lets an error simply
 // indicate good or bad health.
 type SelfBooler interface {
+	// Status indicates the health status for this error. If this method returns false,
+	// StatusBad is assumed. If this method returns true, StatusGood is assumed.
+	// Note that this allows errors to indicate a healthy status.
 	Status() bool
 }
 
@@ -28,6 +33,10 @@ func (se *statusError) Error() string {
 
 func (se *statusError) Unwrap() error {
 	return se.err
+}
+
+func (se *statusError) Status() Status {
+	return se.status
 }
 
 // AddStatus associates a health Status with the given error. The
