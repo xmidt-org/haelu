@@ -23,6 +23,65 @@ func (be *boolError) Status() bool {
 	return be.success
 }
 
+// errorStatusTestCases are the common cases for testing error statuses
+// for the ErrorStatus and Probe tests.
+var errorStatusTestCases = []struct {
+	name     string
+	err      error
+	expected Status
+}{
+	{
+		name:     "Nil",
+		err:      nil,
+		expected: StatusGood,
+	},
+	{
+		name:     "Simple",
+		err:      errors.New("expected"),
+		expected: StatusBad,
+	},
+	{
+		name: "TrueBooler",
+		err: &boolError{
+			msg:     "expected",
+			success: true,
+		},
+		expected: StatusGood,
+	},
+	{
+		name: "FalseBooler",
+		err: &boolError{
+			msg:     "expected",
+			success: false,
+		},
+		expected: StatusBad,
+	},
+	{
+		name: "GoodStatuser",
+		err: &statusError{
+			err:    errors.New("expected"),
+			status: StatusGood,
+		},
+		expected: StatusGood,
+	},
+	{
+		name: "WarnStatuser",
+		err: &statusError{
+			err:    errors.New("expected"),
+			status: StatusWarn,
+		},
+		expected: StatusWarn,
+	},
+	{
+		name: "BadStatuser",
+		err: &statusError{
+			err:    errors.New("expected"),
+			status: StatusBad,
+		},
+		expected: StatusBad,
+	},
+}
+
 type ErrorTestSuite struct {
 	suite.Suite
 }
@@ -65,64 +124,7 @@ func (suite *ErrorTestSuite) TestBooler() {
 }
 
 func (suite *ErrorTestSuite) TestErrorStatus() {
-	testCases := []struct {
-		name     string
-		err      error
-		expected Status
-	}{
-		{
-			name:     "Nil",
-			err:      nil,
-			expected: StatusGood,
-		},
-		{
-			name:     "Simple",
-			err:      errors.New("expected"),
-			expected: StatusBad,
-		},
-		{
-			name: "TrueBooler",
-			err: &boolError{
-				msg:     "expected",
-				success: true,
-			},
-			expected: StatusGood,
-		},
-		{
-			name: "FalseBooler",
-			err: &boolError{
-				msg:     "expected",
-				success: false,
-			},
-			expected: StatusBad,
-		},
-		{
-			name: "GoodStatuser",
-			err: &statusError{
-				err:    errors.New("expected"),
-				status: StatusGood,
-			},
-			expected: StatusGood,
-		},
-		{
-			name: "WarnStatuser",
-			err: &statusError{
-				err:    errors.New("expected"),
-				status: StatusWarn,
-			},
-			expected: StatusWarn,
-		},
-		{
-			name: "BadStatuser",
-			err: &statusError{
-				err:    errors.New("expected"),
-				status: StatusBad,
-			},
-			expected: StatusBad,
-		},
-	}
-
-	for _, testCase := range testCases {
+	for _, testCase := range errorStatusTestCases {
 		suite.Run(testCase.name, func() {
 			suite.Equal(
 				testCase.expected,
