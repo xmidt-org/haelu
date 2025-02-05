@@ -88,7 +88,7 @@ func (ssm *subsystemTracker) startProbeTask(ctx context.Context) {
 
 // Update implements the Updater interface. This method updates this
 // tracker's state under the monitor's lock. It then invokes the
-// unsafeUpdateStatus closure to allow the monitor to update its
+// unsafeUpdateState closure to allow the monitor to update its
 // overall status.
 func (ssm *subsystemTracker) Update(s Status, err error) {
 	defer ssm.lock.Unlock()
