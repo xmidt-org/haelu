@@ -288,7 +288,6 @@ func WithSubsystem(d Definition) MonitorOption {
 			definition:        d,
 		}
 
-		st.definition.Attributes = d.Attributes.Clone()
 		m.byName[d.Name] = st
 		m.trackers = append(m.trackers, st)
 		return nil
@@ -327,7 +326,7 @@ func NewMonitor(opts ...MonitorOption) (*Monitor, error) {
 		// take the initial state from the definition
 		st.current = &m.subsystems[i]
 		st.current.Status = st.definition.Status
-		st.current.Attributes = st.definition.Attributes
+		st.current.Metadata = st.definition.Metadata
 		st.current.LastUpdate = initialLastUpdate
 
 		// normalize the probe interval

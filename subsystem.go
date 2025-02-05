@@ -17,31 +17,6 @@ type Updater interface {
 	Update(Status, error)
 }
 
-// Attributes are a set of name/value pairs associated with a Subsystem.
-// Attributes are not used by a health Monitor and can provide extra
-// information about the subsystem for reporting.
-type Attributes map[string]any
-
-// Clone creates a shallow copy of this Attributes. Individual values
-// are transferred as is to the clone. If this Attributes is empty,
-// a nil Attributes is returned by this method.
-//
-// In general, callers should not retain Attributes in a definition or
-// from an event. If Attributes need to be retained, use this method to
-// make a copy. Note that any mutable values would still need to be copied.
-func (a Attributes) Clone() Attributes {
-	if len(a) == 0 {
-		return nil
-	}
-
-	clone := make(Attributes, len(a))
-	for k, v := range a {
-		clone[k] = v
-	}
-
-	return clone
-}
-
 // Name is the human-readable identifier for a subsystem.  Names must be
 // unique within a Monitor.
 type Name string
@@ -78,10 +53,9 @@ type Definition struct {
 	// this field is ignored.
 	ProbeInterval time.Duration
 
-	// Attributes are optional name/value pairs to associate with this subsystem. A caller may
-	// specify any values in this map. The Monitor does not modify this field, but does make
-	// a shallow copy of these Attributes for its internal storage.
-	Attributes Attributes
+	// Metadata are optional name/value pairs to associate with this subsystem. A caller may
+	// specify any values in this map to act as metadata for the subsystem.
+	Metadata Metadata
 }
 
 // Subsystem is a snapshot of the current state of a logical subsystem within a monitor.
@@ -107,9 +81,9 @@ type Subsystem struct {
 	// the overall Monitor status.
 	NonCritical bool `json:"nonCritical" yaml:"nonCritical"`
 
-	// Attributes is the optional set of name/value pairs that were supplied when the
+	// Metadata is the optional set of name/value pairs that were supplied when the
 	// subsystem was defined.
-	Attributes Attributes `json:"attributes,omitempty" yaml:"attributes,omitempty"`
+	Metadata Metadata `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
 // Subsystems is an immutable, iterable sequence of Subsystem snapshots.
