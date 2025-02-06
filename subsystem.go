@@ -91,12 +91,27 @@ type Subsystems struct {
 	ss []Subsystem
 }
 
-// wrapSubsystemSlice clones the given slice and returns an immutable
-// sequence over it.
-func wrapSubsystemSlice(original []Subsystem) (s Subsystems) {
-	s.ss = make([]Subsystem, len(original))
-	copy(s.ss, original)
+// AsSubsystems creates an immutable Subsystems sequence from a slice
+// of individual Subsystem instances. The returned Subsystems will be
+// a shallow copy of the given slice.
+//
+// If the subs slice is empty, the returned Subsystems will be an
+// immutable, empty sequence.
+func AsSubsystems(subs ...Subsystem) (s Subsystems) {
+	s.ss = make([]Subsystem, len(subs))
+	copy(s.ss, subs)
 	return
+}
+
+// Len returns the count of Subsystem snapshots in this sequence.
+func (s Subsystems) Len() int {
+	return len(s.ss)
+}
+
+// Get returns the Subsystem at the given 0-based index. If i is
+// negative or not less than Len(), this function panics.
+func (s Subsystems) Get(i int) Subsystem {
+	return s.ss[i]
 }
 
 // All provides an iterator over this immutable sequence.

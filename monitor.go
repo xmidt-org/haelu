@@ -179,7 +179,7 @@ func (m *Monitor) unsafeUpdateState(timestamp time.Time) {
 	m.state.Store(MonitorState{
 		Status:     overall,
 		LastUpdate: timestamp,
-		Subsystems: wrapSubsystemSlice(m.subsystems),
+		Subsystems: AsSubsystems(m.subsystems...),
 	})
 }
 
