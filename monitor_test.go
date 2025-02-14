@@ -201,6 +201,9 @@ func (suite *MonitorTestSuite) TestInitialStates() {
 			)
 
 			suite.assertUpdaters(m, suite.names(testCase.definitions...)...)
+
+			suite.assertShutdown(m)
+			suite.assertUpdaters(m, suite.names(testCase.definitions...)...)
 		})
 	}
 }
