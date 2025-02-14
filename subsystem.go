@@ -98,8 +98,13 @@ type Subsystems struct {
 // If the subs slice is empty, the returned Subsystems will be an
 // immutable, empty sequence.
 func AsSubsystems(subs ...Subsystem) (s Subsystems) {
-	s.ss = make([]Subsystem, len(subs))
-	copy(s.ss, subs)
+	// NOTE: wrap a nil slice in the returned Subsystems if
+	// the original slice is empty.
+	if len(subs) > 0 {
+		s.ss = make([]Subsystem, len(subs))
+		copy(s.ss, subs)
+	}
+
 	return
 }
 

@@ -44,6 +44,9 @@ type subsystemTracker struct {
 	// lock is "inherited" from the containing monitor
 	lock sync.Locker
 
+	// now is the current time strategy "inherited" from the containing monitor
+	now now
+
 	// newTimer is the timer strategy "inherited" from the containing monitor
 	newTimer newTimer
 
@@ -59,28 +62,50 @@ type subsystemTracker struct {
 	current *Subsystem
 }
 
+// initialize sets up this tracker's initial state, using both its definition
+// and information from the containing Monitor.
+func (sst *subsystemTracker) initialize(m *Monitor, initialLastUpdate time.Time, current *Subsystem) {
+	sst.now = m.now
+	sst.newTimer = m.newTimer
+
+	// take the initial state from the definition
+	sst.current = current
+	sst.current.Name = sst.definition.Name
+	sst.current.Status = sst.definition.Status
+	sst.current.NonCritical = sst.definition.NonCritical
+	sst.current.Metadata = sst.definition.Metadata
+	sst.current.LastUpdate = initialLastUpdate
+
+	// normalize the probe interval
+	if sst.definition.Probe == nil {
+		sst.definition.ProbeInterval = 0
+	} else if sst.definition.ProbeInterval <= 0 {
+		sst.definition.ProbeInterval = m.defaultProbeInterval
+	}
+}
+
 // startProbeTask ensures that a background goroutine is running
 // to monitor the results from a Probe. If this subsystem has no Probe,
 // this method does nothing.
 //
 // If this method starts a goroutine, it will stop with the supplied
 // context is canceled.
-func (ssm *subsystemTracker) startProbeTask(ctx context.Context) {
-	if ssm.definition.Probe == nil {
+func (sst *subsystemTracker) startProbeTask(ctx context.Context) {
+	if sst.definition.Probe == nil {
 		return
 	}
 
 	go func() {
 		for {
-			timeCh, stop := ssm.newTimer(ssm.definition.ProbeInterval)
+			timeCh, stop := sst.newTimer(sst.definition.ProbeInterval)
 			select {
 			case <-ctx.Done():
 				stop()
 				return
 
 			case <-timeCh:
-				s, err := ssm.definition.Probe(ctx)
-				ssm.Update(s, err)
+				s, err := sst.definition.Probe(ctx)
+				sst.Update(s, err)
 			}
 		}
 	}()
@@ -90,15 +115,15 @@ func (ssm *subsystemTracker) startProbeTask(ctx context.Context) {
 // tracker's state under the monitor's lock. It then invokes the
 // unsafeUpdateState closure to allow the monitor to update its
 // overall status.
-func (ssm *subsystemTracker) Update(s Status, err error) {
-	defer ssm.lock.Unlock()
-	ssm.lock.Lock()
+func (sst *subsystemTracker) Update(s Status, err error) {
+	defer sst.lock.Unlock()
+	sst.lock.Lock()
 
-	ssm.current.Status = s
-	ssm.current.LastError = err
-	ssm.current.LastUpdate = time.Now().UTC()
+	sst.current.Status = s
+	sst.current.LastError = err
+	sst.current.LastUpdate = sst.now().UTC()
 
-	ssm.unsafeUpdateState(ssm.current.LastUpdate)
+	sst.unsafeUpdateState(sst.current.LastUpdate)
 }
 
 // Monitor is a health status monitor for application subsystems.
@@ -117,6 +142,10 @@ func (ssm *subsystemTracker) Update(s Status, err error) {
 // the Monitor is recomputed.
 type Monitor struct {
 	defaultProbeInterval time.Duration
+
+	// now is the strategy used to get the current time.
+	// by default, time.Now is used.
+	now now
 
 	// newTimer is a factory for creating the timer channel and stop function.
 	// if unset, defaultNewTimer is used.
@@ -215,6 +244,9 @@ func (m *Monitor) State() MonitorState {
 //
 // This method is idempotent. If this Monitor has already been started, this method
 // does nothing and returns ErrMonitorStarted.
+//
+// Start will update the overall timestamp for the State, but will not modify any
+// LastUpdate fields for subsystems.
 func (m *Monitor) Start() error {
 	defer m.lock.Unlock()
 	m.lock.Lock()
@@ -223,7 +255,7 @@ func (m *Monitor) Start() error {
 		return ErrMonitorStarted
 	}
 
-	m.unsafeUpdateState(time.Now().UTC())
+	m.unsafeUpdateState(m.now().UTC())
 	var rootCtx context.Context
 	rootCtx, m.cancel = context.WithCancel(context.Background())
 	for _, st := range m.trackers {
@@ -275,21 +307,24 @@ func WithDefaultProbeInterval(i time.Duration) MonitorOption {
 	})
 }
 
-// WithSubsystem defines a single subsystem for health monitoring.
-func WithSubsystem(d Definition) MonitorOption {
+// WithSubsystems defines several subsystems for the monitor.
+func WithSubsystems(defs ...Definition) MonitorOption {
 	return monitorOptionFunc(func(m *Monitor) error {
-		if m.byName[d.Name] != nil {
-			return fmt.Errorf("A subsystem with the name [%s] already exists", d.Name)
+		for _, d := range defs {
+			if m.byName[d.Name] != nil {
+				return fmt.Errorf("A subsystem with the name [%s] already exists", d.Name)
+			}
+
+			st := &subsystemTracker{
+				lock:              &m.lock,
+				unsafeUpdateState: m.unsafeUpdateState,
+				definition:        d,
+			}
+
+			m.byName[d.Name] = st
+			m.trackers = append(m.trackers, st)
 		}
 
-		st := &subsystemTracker{
-			lock:              &m.lock,
-			unsafeUpdateState: m.unsafeUpdateState,
-			definition:        d,
-		}
-
-		m.byName[d.Name] = st
-		m.trackers = append(m.trackers, st)
 		return nil
 	})
 }
@@ -307,6 +342,7 @@ func NewMonitor(opts ...MonitorOption) (*Monitor, error) {
 	m := &Monitor{
 		byName:               make(map[Name]*subsystemTracker),
 		defaultProbeInterval: DefaultProbeInterval,
+		now:                  time.Now,
 		newTimer:             defaultNewTimer,
 	}
 
@@ -319,22 +355,11 @@ func NewMonitor(opts ...MonitorOption) (*Monitor, error) {
 	m.subsystems = make([]Subsystem, len(m.trackers))
 
 	// now that the options are applied, make a pass over the subsystems
-	initialLastUpdate := time.Now().UTC()
-	for i, st := range m.trackers {
-		st.newTimer = m.newTimer
-
-		// take the initial state from the definition
-		st.current = &m.subsystems[i]
-		st.current.Status = st.definition.Status
-		st.current.Metadata = st.definition.Metadata
-		st.current.LastUpdate = initialLastUpdate
-
-		// normalize the probe interval
-		if st.definition.Probe == nil {
-			st.definition.ProbeInterval = 0
-		} else if st.definition.ProbeInterval <= 0 {
-			st.definition.ProbeInterval = m.defaultProbeInterval
-		}
+	initialLastUpdate := m.now().UTC()
+	for i, sst := range m.trackers {
+		// pass the initialLastUpdate so all subsystem's get a consistent
+		// starting timestamp.
+		sst.initialize(m, initialLastUpdate, &m.subsystems[i])
 	}
 
 	m.unsafeUpdateState(initialLastUpdate)

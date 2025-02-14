@@ -5,6 +5,10 @@ package haelu
 
 import "time"
 
+// now is a closure used to produce the current time.
+// By default, time.Now is used.
+type now func() time.Time
+
 // newTimer is a factory closure for a timer channel and the associated Stop function.
 type newTimer func(time.Duration) (<-chan time.Time, func() bool)
 
