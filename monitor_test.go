@@ -179,6 +179,27 @@ func (suite *MonitorTestSuite) TestInitialStates() {
 			},
 			expected: StatusBad,
 		},
+		{
+			name: "OneGoodNonCritical",
+			definitions: []Definition{
+				{Name: "initial", NonCritical: true},
+			},
+			expected: StatusGood,
+		},
+		{
+			name: "OneWarnCritical",
+			definitions: []Definition{
+				{Name: "initial", Status: StatusWarn, NonCritical: true},
+			},
+			expected: StatusWarn,
+		},
+		{
+			name: "OneBadCritical",
+			definitions: []Definition{
+				{Name: "initial", Status: StatusBad, NonCritical: true},
+			},
+			expected: StatusWarn,
+		},
 	}
 
 	for _, testCase := range testCases {
