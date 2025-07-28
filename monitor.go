@@ -227,7 +227,7 @@ func (m *Monitor) Get(n Name) (Updater, error) {
 	// no locking necessary, as the set of subsystems is immutable
 	updater := m.byName[n]
 	if updater == nil {
-		return nil, fmt.Errorf("No subsystem with the name [%s] is registered", n)
+		return nil, fmt.Errorf("no subsystem with the name [%s] is registered", n)
 	}
 
 	return updater, nil
@@ -312,7 +312,7 @@ func WithSubsystems(defs ...Definition) MonitorOption {
 	return monitorOptionFunc(func(m *Monitor) error {
 		for _, d := range defs {
 			if m.byName[d.Name] != nil {
-				return fmt.Errorf("A subsystem with the name [%s] already exists", d.Name)
+				return fmt.Errorf("a subsystem with the name [%s] already exists", d.Name)
 			}
 
 			st := &subsystemTracker{
