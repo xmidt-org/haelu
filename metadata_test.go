@@ -83,16 +83,16 @@ func (suite *MetadataTestSuite) TestValues() {
 		for n, v := range m.All() {
 			switch n {
 			case "url":
-				suite.Equal(v, "https://service.foobar.net/something")
+				suite.Equal("https://service.foobar.net/something", v)
 
 			case "version":
-				suite.Equal(v, 1.2)
+				suite.InEpsilon(1.2, v, 1e-9)
 
 			case "123":
-				suite.Equal(v, "a number")
+				suite.Equal("a number", v)
 
 			case "stringer":
-				suite.Equal(v, "stringer value")
+				suite.Equal("stringer value", v)
 
 			default:
 				suite.Failf("key not in original values", "key: %s", n)
@@ -117,10 +117,10 @@ func (suite *MetadataTestSuite) TestValues() {
 		for n, v := range m.All() {
 			switch n {
 			case "url":
-				suite.Equal(v, "https://service.foobar.net/something")
+				suite.Equal("https://service.foobar.net/something", v)
 
 			case "version":
-				suite.Equal(v, 1.2)
+				suite.InEpsilon(1.2, v, 1e-9)
 
 			case "dangling":
 				suite.Nil(v)

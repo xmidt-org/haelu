@@ -88,7 +88,7 @@ func NewHandler(opts ...HandlerOption) (*Handler, error) {
 }
 
 // ServeHTTP returns an HTTP response that represents the most recent health update.
-func (h *Handler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (h *Handler) ServeHTTP(response http.ResponseWriter, _ *http.Request) {
 	// force clients to always revalidate and fetch the current value
 	response.Header().Set("Cache-Control", "no-cache")
 	state := h.monitor.State()

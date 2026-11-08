@@ -61,9 +61,8 @@ func AsProbe[F ProbeFunc](f F) Probe {
 		return func(_ context.Context) (Status, error) {
 			if pf() {
 				return StatusGood, nil
-			} else {
-				return StatusBad, nil
 			}
+			return StatusBad, nil
 		}
 
 	case fv.CanConvert(probeContextReturnBool):
@@ -71,9 +70,8 @@ func AsProbe[F ProbeFunc](f F) Probe {
 		return func(ctx context.Context) (Status, error) {
 			if pf(ctx) {
 				return StatusGood, nil
-			} else {
-				return StatusBad, nil
 			}
+			return StatusBad, nil
 		}
 
 	case fv.CanConvert(probeReturnError):

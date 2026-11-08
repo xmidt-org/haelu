@@ -78,7 +78,7 @@ func (suite *MonitorTestSuite) newExpectedSubsystem(d Definition) (s Subsystem) 
 func (suite *MonitorTestSuite) newExpectedSubsystems(defs ...Definition) (ss []Subsystem) {
 	if len(defs) > 0 {
 		ss = make([]Subsystem, len(defs))
-		for i := range len(defs) {
+		for i := range defs {
 			ss[i] = suite.newExpectedSubsystem(defs[i])
 		}
 	}
@@ -126,7 +126,7 @@ func (suite *MonitorTestSuite) assertUpdater(m *Monitor, name Name) Updater {
 // assertUpdaters verifies several subsystem names via assertUpdater.
 func (suite *MonitorTestSuite) assertUpdaters(m *Monitor, names ...Name) (us []Updater) {
 	us = make([]Updater, len(names))
-	for i := range len(names) {
+	for i := range names {
 		us[i] = suite.assertUpdater(m, names[i])
 	}
 
@@ -136,14 +136,14 @@ func (suite *MonitorTestSuite) assertUpdaters(m *Monitor, names ...Name) (us []U
 // assertStart checks that the Monitor can be started and that Start
 // is idempotent.
 func (suite *MonitorTestSuite) assertStart(m *Monitor) {
-	suite.NoError(m.Start())
+	suite.Require().NoError(m.Start())
 	suite.ErrorIs(m.Start(), ErrMonitorStarted) // idempotent
 }
 
 // assertShutdown checks that the Monitor can be shutdown and that Shutdown
 // is idempotent.
 func (suite *MonitorTestSuite) assertShutdown(m *Monitor) {
-	suite.NoError(m.Shutdown())
+	suite.Require().NoError(m.Shutdown())
 	suite.ErrorIs(m.Shutdown(), ErrMonitorShutdown) // idempotent
 }
 

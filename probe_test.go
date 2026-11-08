@@ -39,11 +39,15 @@ func (suite *ProbeTestSuite) assertProbe(p Probe, expectedStatus Status, expecte
 	suite.Require().NotNil(p)
 	actualStatus, actualErr := p(suite.testCtx)
 	suite.Equal(expectedStatus, actualStatus)
-	suite.ErrorIs(expectedErr, actualErr)
+	if expectedErr == nil {
+		suite.Require().NoError(actualErr)
+	} else {
+		suite.Require().ErrorIs(actualErr, expectedErr)
+	}
 	suite.True(suite.called)
 }
 
-// testAsProbeReturnBool verifies func() bool and func(context.Context) bool
+// testAsProbeReturnBool verifies func() bool and func(context.Context) bool.
 func (suite *ProbeTestSuite) testAsProbeReturnBool() {
 	suite.Run("WithoutContext", func() {
 		suite.Run("True", func() {
@@ -70,7 +74,7 @@ func (suite *ProbeTestSuite) testAsProbeReturnBool() {
 	})
 }
 
-// testAsProbeReturnError verifies func() error and func(context.Context) error
+// testAsProbeReturnError verifies func() error and func(context.Context) error.
 func (suite *ProbeTestSuite) testAsProbeReturnError() {
 	suite.Run("WithoutContext", func() {
 		for _, testCase := range errorStatusTestCases {
@@ -91,7 +95,7 @@ func (suite *ProbeTestSuite) testAsProbeReturnError() {
 	})
 }
 
-// testAsProbeReturnStatus verifies func() Status and func(context.Context) Status
+// testAsProbeReturnStatus verifies func() Status and func(context.Context) Status.
 func (suite *ProbeTestSuite) testAsProbeReturnStatus() {
 	testCases := []Status{
 		StatusGood,

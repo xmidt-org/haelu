@@ -96,10 +96,10 @@ func (suite *ErrorTestSuite) TestAddStatus() {
 	for _, status := range testCases {
 		wrappedErr := errors.New("wrapped error")
 		err := AddStatus(wrappedErr, status)
-		suite.Require().NotNil(err)
+		suite.Require().Error(err)
 		suite.Require().Implements((*SelfStatuser)(nil), err)
 		suite.Equal(wrappedErr.Error(), err.Error())
-		suite.ErrorIs(err, wrappedErr)
+		suite.Require().ErrorIs(err, wrappedErr)
 		suite.Equal(status, err.(SelfStatuser).Status())
 	}
 }

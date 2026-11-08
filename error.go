@@ -79,9 +79,8 @@ func ErrorStatus(err error) Status {
 	case errors.As(err, &b):
 		if b.Status() {
 			return StatusGood
-		} else {
-			return StatusBad
 		}
+		return StatusBad
 
 	default:
 		return StatusBad
